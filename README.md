@@ -1,7 +1,7 @@
 # Intro
 
 The purpose of the repository is to provide examples and guidance in creating and storing a user consumable modification layer for the Library of Linuxserver.io Containers.
-At it's core a Docker Mod is a tarball of files stored on Dockerhub and/or GitHub Container Registry that is downloaded and extracted on container boot before any init logic is run.
+At its core a Docker Mod is a tarball of files stored on Dockerhub and/or GitHub Container Registry that is downloaded and extracted on container boot before any init logic is run.
 This allows:
 
 * Developers and community users to modify base containers to suit their needs without the need to maintain a fork of the main docker repository
@@ -9,7 +9,7 @@ This allows:
 * Zero cost hosting and build pipelines for these modifications leveraging GitHub Container Registry and Dockerhub
 * Full custom configuration management layers for hooking containers into each other using environment variables contained in a compose file
 
-It is important to note to end users of this system that there are not only extreme security implications to consuming files from souces outside of our control, but by leveraging community Mods you essentially lose direct support from the core LinuxServer team. Our first and foremost troubleshooting step will be to remove the `DOCKER_MODS` environment variable when running into issues and replace the container with a clean LSIO one.
+It is important to note to end users of this system that there are not only extreme security implications to consuming files from sources outside of our control, but by leveraging community Mods you essentially lose direct support from the core LinuxServer team. Our first and foremost troubleshooting step will be to remove the `DOCKER_MODS` environment variable when running into issues and replace the container with a clean LSIO one.
 
 Again, when pulling in logic from external sources practice caution and trust the sources/community you get them from.
 
@@ -17,11 +17,11 @@ Again, when pulling in logic from external sources practice caution and trust th
 
 We host and publish official Mods at the [linuxserver/mods](https://github.com/orgs/linuxserver/packages/container/mods/versions) endpoint as separate tags. Each tag is in the format of `<imagename>-<modname>` for the latest versions, and `<imagename>-<modname>-<commitsha>` for the specific versions.
 
-Here's a list of the official Mods we host: <https://mods.linuxserver.io/>
+Here's a list of the official Mods we host: [https://mods.linuxserver.io/](https://mods.linuxserver.io/)
 
 ## Using a Docker Mod
 
-Before consuming a Docker Mod ensure that the source code for it is publicly posted along with it's build pipeline pushing to Dockerhub.
+Before consuming a Docker Mod ensure that the source code for it is publicly posted along with its build pipeline pushing to Dockerhub.
 
 Consumption of a Docker Mod is intended to be as user friendly as possible and can be achieved with the following environment variables being passed to the container:
 
@@ -30,36 +30,61 @@ Consumption of a Docker Mod is intended to be as user friendly as possible and c
 
 Full example:
 
+docker run
+
 ```bash
 docker create \
   --name=nzbget \
-  -e DOCKER_MODS=taisun/nzbget-mod:latest \
+  -e DOCKER_MODS=lscr.io/linuxserver/mods:universal-tshoot \
   -e PUID=1000 \
   -e PGID=1000 \
   -e TZ=Europe/London \
   -p 6789:6789 \
-  -v <path to data>:/config \
-  -v <path/to/downloads>:/downloads \
+  -v /path/to/nzbget/data:/config \
+  -v /path/to/downloads:/downloads \
   --restart unless-stopped \
-  linuxserver/nzbget
+  lscr.io/linuxserver/nzbget
 ```
 
-This will spinup an nzbget container and apply the custom logic found in the following repository:
+ docker compose
 
-<https://github.com/Taisun-Docker/Linuxserver-Mod-Demo>
+```yaml
+---
+services:
+  nzbget:
+    image: lscr.io/linuxserver/nzbget:latest
+    container_name: nzbget
+    environment:
+      - DOCKER_MODS=lscr.io/linuxserver/mods:universal-tshoot
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/London
+    volumes:
+      - /path/to/nzbget/data:/config
+      - /path/to/downloads:/downloads #optional
+    ports:
+      - 6789:6789
+    restart: unless-stopped
+```
 
-This basic demo installs Pip and a couple dependencies for plugins some users leverage with nzbget.
+This will spin up an nzbget container and apply the custom logic found in the following repository:
+
+[https://github.com/linuxserver/docker-mods/tree/universal-tshoot](https://github.com/linuxserver/docker-mods/tree/universal-tshoot)
+
+This mod installs some basic troubleshooting tools such as dig, netstat, nslookup, etc.
 
 ## Creating and maintaining a Docker Mod
 
-We will always recommend to our users consuming Mods that they leverage ones from active community members or projects so transparency is key here. We understand that image layers can be pushed on the back end behind these pipelines, but every little bit helps.
-In this repository we will be going over two basic methods of making a Mod along with an example of the GitHub Actions build logic to get this into a Dockerhub and/or GitHub Container Registry endpoint. Though we are not officially endorsing GitHub Actions here it is built in to GitHub repositories and forks making it very easy to get started. If you prefer others feel free to use them as long as build jobs are transparent.
+**All of the example files referenced in this section are available in the [template](https://github.com/linuxserver/docker-mods/tree/template) branch of this repo.**
 
-One of the core ideas to remember when creating a Mod is that it can only contain a single image layer, the examples below will show you how to add files standardly and how to run complex logic to assemble the files in a build layer to copy them over into this single layer.
+We will always recommend to our users consuming Mods that they leverage ones from active community members or projects so transparency is key here. We understand that image layers can be pushed on the back end behind these pipelines, but every little bit helps. In this repository we will be going over two basic methods of making a Mod along with an example of the GitHub Actions build logic to get this into a Dockerhub and/or GitHub Container Registry endpoint. Though we are not officially endorsing GitHub Actions here it is built in to GitHub repositories and forks making it very easy to get started. If you prefer others feel free to use them as long as build jobs are transparent.
+
+> **Note**
+> One of the core ideas to remember when creating a Mod is that it can only contain a **single image layer**, the examples below will show you how to add files standardly and how to run complex logic to assemble the files in a build layer to copy them over into this single layer.
 
 ### Mod Types
 
-We now support "hybrid" mods, targeting both s6 v2 and v3. All currently supported Linuxserver base images are using s6 v3, however, older pinned images, forked versions, etc. may still be using v2. To support both cases, simply include both sets of files (as below) in your mod, the built-in mod logic will pick the appropriate files to run. v2 mods will run on v3 base images for the forseeable future but we will not provide support for that configuration.
+We now only support s6 v3 mods. All currently supported Linuxserver base images are using s6 v3, however, older pinned images, forked versions, etc. may still be using v2. New mods will not work with older s6 v2 based images.
 
 ### Docker Mod Simple - just add scripts
 
@@ -87,28 +112,29 @@ The most common paths to leverage for Linuxserver images are as follows. Assumin
       └── s6-rc.d
         ├── init-mods-end
         │  └── dependencies.d
-        │     └── init-mod-universal-mymod    -- If your mod does not need to install packages it should be a dependency of init-mods-end
+        │     └── init-mod-universal-mymod    -- If your mod does not need to install packages it should be a dependency of init-mods-end (empty file)
         ├── init-mods-package-install
         │  └── dependencies.d
-        │     └── init-mod-universal-mymod    -- If your mod needs to install packages it should be a dependency of init-mods-package-install
+        │     └── init-mod-universal-mymod    -- If your mod needs to install packages it should be a dependency of init-mods-package-install (empty file)
         ├── init-mod-universal-mymod
         │  ├── dependencies.d
-        │  │  └── init-mods
-        │  ├── run                            -- This is the init logic script that runs before the services in the container. It needs to be `chmod +x`.
+        │  │  └── init-mods                   -- Tells our init logic that this depends on the `init-mods` step (empty file)
+        │  ├── run                            -- This is the init logic script that runs before the services in the container. Use `chmod +x` to set proper permissions.
         │  ├── type                           -- This should contain the string `oneshot`.
         │  └── up                             -- This should contain the absolute path to `run` e.g. `/etc/s6-overlay/s6-rc.d/init-mod-universal-mymod/run`.
         ├── svc-mod-universal-mymod
         │  ├── dependencies.d
-        │  │  └── init-services
-        │  ├── run                            -- This is the script that runs in the foreground for persistent services. It needs to be `chmod +x`.
+        │  │  └── init-services               -- Tells our init logic that this depends on the `init-services` step (empty file)
+        │  ├── run                            -- This is the script that runs in the foreground for persistent services. Use `chmod +x` to set proper permissions.
         │  └── type                           -- This should contain the string `longrun`.
         └── user
           └── contents.d
-            ├── init-mod-universal-mymod
-            └── svc-mod-universal-mymod
+            ├── init-mod-universal-mymod      -- Tells our init logic that we need this directory (empty file)
+            └── svc-mod-universal-mymod       -- Tells our init logic that we need this directory (empty file)
 ```
 
-Note: For `oneshot` scripts you can alternatively omit the `run` file entirely and use the [execlineb](https://skarnet.org/software/execline/execlineb.html) syntax in `up` if your requirements are simple enough.
+> **Note**
+> For `oneshot` scripts you can alternatively omit the `run` file entirely and use the [execlineb](https://skarnet.org/software/execline/execlineb.html) syntax in `up` if your requirements are simple enough.
 
 #### Installing Packages
 
@@ -158,32 +184,13 @@ If your mod needs to take additional config steps *after* the packages have been
 
 Services will always run last, controlled by their dependency on `init-services`.
 
-#### Legacy (v2) mods
-
-The most common paths to leverage for Linuxserver images are as follows. Assuming a mod name of `universal-mymod`:
-
-```text
-.
-└── root
-  ├── defaults                  -- Any default config files you need to copy as part of the mod can be placed here
-  └── etc
-    ├── cont-init.d
-    │  ├── 95-apt-get
-    │  └── 98-universal-mymod   -- This is the init logic script that runs before the services in the container. It needs to be `chmod +x` and is run ordered by filename.
-    └── services.d
-      └── mymod
-        └── run                 -- This is the script that runs in the foreground for persistent services. It needs to be `chmod +x`.
-```
-
-The example files in this repo contain a script to install sshutil and a service file to run the installed utility.
-
 ### Docker Mod Complex - Sky is the limit
 
 In this repository you will find the `Dockerfile.complex` containing:
 
 ```Dockerfile
 ## Buildstage ##
-FROM ghcr.io/linuxserver/baseimage-alpine:3.12 as buildstage
+FROM ghcr.io/linuxserver/baseimage-alpine:3.20 as buildstage
 
 RUN \
   echo "**** install packages ****" && \
@@ -205,14 +212,14 @@ FROM scratch
 COPY --from=buildstage /root-layer/ /
 ```
 
-Here we are leveraging a multi stage DockerFile to run custom logic and pull down an Rclone deb from the Internet to include in our image layer for distribution. Any amount of logic can be run in this build stage or even multiple build stages as long as the files in the end are combined into a single folder for the COPY command in the final output.
+Here we are leveraging a multi stage DockerFile to run custom logic and pull down an rclone deb from the Internet to include in our image layer for distribution. Any amount of logic can be run in this build stage or even multiple build stages as long as the files in the end are combined into a single folder for the COPY command in the final output.
 
 ## Getting a Mod to Dockerhub
 
 To publish a Mod to DockerHub you will need the following accounts:
 
-* Github- <https://github.com/join>
-* DockerHub- <https://hub.docker.com/signup>
+* Github- [https://github.com/join](https://github.com/join)
+* DockerHub- [https://hub.docker.com/signup](https://hub.docker.com/signup)
 
 We recommend using this repository as a template for your first Mod, so in this section we assume the code is finished and we will only concentrate on plugging into GitHub Actions/Dockerhub.
 
@@ -229,7 +236,7 @@ Head over to `https://github.com/user/endpoint/settings/secrets` and click on `N
 
 Add `DOCKERUSER` (your DockerHub username) and `DOCKERPASS` (your DockerHub password or token).
 
-You can create a token by visiting <https://hub.docker.com/settings/security>
+You can create a token by visiting [https://hub.docker.com/settings/security](https://hub.docker.com/settings/security)
 
 GitHub Actions will trigger a build off of your repo when you commit. The image will be pushed to Dockerhub on success. This Dockerhub endpoint is the Mod variable you can use to customize your container now.
 
@@ -237,7 +244,7 @@ GitHub Actions will trigger a build off of your repo when you commit. The image 
 
 To publish a Mod to GitHub Container Registry you will need the following accounts:
 
-* Github- <https://github.com/join>
+* Github- [https://github.com/join](https://github.com/join)
 
 We recommend using this repository as a template for your first Mod, so in this section we assume the code is finished and we will only concentrate on plugging into GitHub Actions/GitHub Container Registry.
 
@@ -248,13 +255,13 @@ The only code change you need to make to the build logic file `.github/workflows
   BRANCH: "master"
 ```
 
-User is your GitHub user and endpoint is your own custom name (typically the name of the repository where your mod is). You do not need to create this endpoint beforehand, the build logic will push it and create it on first run.
+`user` is your GitHub user and `endpoint` is your own custom name (typically the name of the repository where your mod is). You do not need to create this endpoint beforehand, the build logic will push it and create it on first run.
 
-Head over to `https://github.com/user/endpoint/settings/secrets` and click on `New secret`
+Head over to `https://github.com/<user>/<endpoint>/settings/secrets` and click on `New secret`
 
 Add `CR_USER` (your GitHub username) and `CR_PAT` (a personal access token with `read:packages` and `write:packages` scopes).
 
-You can create a personal access token by visiting <https://github.com/settings/tokens>
+You can create a personal access token by visiting [https://github.com/settings/tokens](https://github.com/settings/tokens)
 
 GitHub Actions will trigger a build off of your repo when you commit. The image will be pushed to GitHub Container Registry on success. This GitHub Container Registry endpoint is the Mod variable you can use to customize your container now.
 
@@ -262,9 +269,11 @@ GitHub Actions will trigger a build off of your repo when you commit. The image 
 
 * Fork this repo, checkout the `template` branch.
 * Edit the `Dockerfile` for the mod. `Dockerfile.complex` is only an example and included for reference; it should be deleted when done.
+* Ensure you set the `maintainer` label to your GitHub username, this allows us to @ you if there are breaking changes that affect or will affect your mod in the future.
 * Inspect the `root` folder contents. Edit, add and remove as necessary.
+* After all init scripts and services are created, run `find ./ -path "./.git" -prune -o ( -name "run" -o -name "finish" -o -name "check" ) -not -perm -u=x,g=x,o=x -print -exec chmod +x {} +` to fix permissions.
 * Edit the readme with pertinent info.
-* Finally edit the `.github/workflows/BuildImage.yml`. Customize the vars for `BASEIMAGE` and `MODNAME`.
+* Finally edit the `.github/workflows/BuildImage.yml`. Customize the vars for `BASEIMAGE` and `MODNAME`. Set the versioning logic and `MULTI_ARCH` if needed.
 * Ask the team to create a new branch named `<baseimagename>-<modname>` in this repo. Baseimage should be the name of the image the mod will be applied to. The new branch will be based on the [template branch](https://github.com/linuxserver/docker-mods/tree/template).
 * Submit PR against the branch created by the team.
 * Make sure that the commits in the PR are squashed.
@@ -272,16 +281,28 @@ GitHub Actions will trigger a build off of your repo when you commit. The image 
 
 ## Appendix
 
+### File encoding
+
+s6 init files must be encoded in plain `UTF-8`, and not `UTF-8 with BOM`. You can remove the BOM using your IDE if necessary.
+
 ### Inspecting mods
 
 To inspect the file contents of external Mods dive is a great CLI tool:
 
-<https://github.com/wagoodman/dive>
+[https://github.com/wagoodman/dive](https://github.com/wagoodman/dive)
 
 Basic usage:
+
+#### With Docker
 
 ```bash
 docker run --rm -it \
     -v /var/run/docker.sock:/var/run/docker.sock \
     wagoodman/dive:latest <Image Name>
+```
+
+#### Without Docker
+
+```bash
+dive <Image Name>
 ```
